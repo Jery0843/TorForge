@@ -228,7 +228,7 @@ func (s *SmartCircuitSelector) TuneWeights(actualLatency, predictedLatency float
 	// Simple gradient descent step
 	error := actualLatency - predictedLatency
 
-	// Adjust weights (simplified - in production would be more sophisticated)
+	// Gradient descent weight adjustment based on prediction error
 	if error > 0 {
 		// Prediction was too optimistic, increase latency weight
 		s.latencyWeight += s.learningRate * 0.01

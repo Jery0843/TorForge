@@ -1,4 +1,4 @@
-// Package api provides REST and WebSocket API for TorForge
+// Package api provides REST API for TorForge
 package api
 
 import (
@@ -98,7 +98,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v1/bypass", s.handleBypass)
 	mux.HandleFunc("/api/v1/stop", s.handleStop)
 	mux.HandleFunc("/health", s.handleHealth)
-	mux.HandleFunc("/ws", s.handleWebSocket)
+	mux.HandleFunc("/events", s.handleEventStream)
 
 	s.server = &http.Server{
 		Addr:         s.cfg.ListenAddr,
@@ -354,9 +354,8 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// WebSocket upgrade and event streaming
-	// Simplified - in production use gorilla/websocket
+// handleEventStream provides Server-Sent Events (SSE) for real-time status updates
+func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")

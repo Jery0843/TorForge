@@ -84,8 +84,7 @@ func NewBridgeDiscovery(dataDir string) *BridgeDiscovery {
 
 // addBuiltinBridges adds some well-known public bridges as fallback
 func (bd *BridgeDiscovery) addBuiltinBridges() {
-	// These are public bridges from the Tor Project
-	// In production, these should be updated periodically
+	// Public bridges from the Tor Project (call DiscoverBridges() to fetch latest)
 	builtinBridges := []Bridge{
 		{
 			Type:    BridgeTypeSnowflake,

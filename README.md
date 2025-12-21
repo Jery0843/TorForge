@@ -452,6 +452,27 @@ MIT License - See [LICENSE](LICENSE)
 
 ---
 
+## ⚠️ Limitations
+
+| Limitation | Details |
+|------------|---------|
+| **Tor latency** | Adds 100-500ms due to 3-hop routing (inherent to Tor) |
+| **UDP not supported** | Blocked for leak protection - VoIP/gaming won't work |
+| **Some sites block Tor** | Captchas or access denied on some services |
+| **Exit node visibility** | Unencrypted traffic visible at exit (always use HTTPS) |
+
+### What TorForge Protects Against
+
+| Threat | Status |
+|--------|--------|
+| DNS leaks | ✅ Forced through Tor |
+| IPv6 leaks | ✅ Completely blocked |
+| UDP leaks | ✅ Blocked |
+| App bypass | ✅ Kernel-level capture |
+| Kill switch bypass | ✅ Default DROP |
+
+---
+
 ## ⚠️ Legal Disclaimer
 
 TorForge is designed for legitimate privacy and security purposes including:

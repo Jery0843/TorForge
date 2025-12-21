@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -767,32 +766,31 @@ WantedBy=multi-user.target
 
 // Test functions for leak detection
 func testDNSLeak() (bool, string) {
-	// Check if DNS queries go through Tor by querying a DNS leak test service
-	resp, err := http.Get("https://dnsleaktest.com/")
+	// Check if DNS queries go through Tor by using curl through SOCKS
+	out, err := exec.Command("curl", "-s", "--socks5-hostname", "127.0.0.1:9050",
+		"--max-time", "15", "https://dnsleaktest.com/").Output()
 	if err != nil {
 		return false, fmt.Sprintf("DNS test failed: %v", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusOK {
+	if len(out) > 0 {
 		return true, "DNS queries routed through Tor"
 	}
 	return false, "DNS leak detected"
 }
 
 func testIPLeak() (bool, string) {
-	// Check if our IP appears as a Tor exit node
-	resp, err := http.Get("https://check.torproject.org/api/ip")
+	// Check if our IP appears as a Tor exit node using SOCKS proxy
+	out, err := exec.Command("curl", "-s", "--socks5-hostname", "127.0.0.1:9050",
+		"--max-time", "15", "https://check.torproject.org/api/ip").Output()
 	if err != nil {
 		return false, fmt.Sprintf("IP test failed: %v", err)
 	}
-	defer resp.Body.Close()
 
 	var result struct {
 		IsTor bool   `json:"IsTor"`
 		IP    string `json:"IP"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(out, &result); err != nil {
 		return false, fmt.Sprintf("Failed to parse response: %v", err)
 	}
 
@@ -808,13 +806,20 @@ func testWebRTCLeak() (bool, string) {
 }
 
 func testTorConnection() (bool, string) {
-	// Verify Tor control port is responding
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:9051", 5*time.Second)
+	// Read the dynamic control port from TorForge data directory
+	controlPortFile := "/var/lib/torforge/control_port"
+	data, err := os.ReadFile(controlPortFile)
 	if err != nil {
-		return false, fmt.Sprintf("Cannot connect to Tor control port: %v", err)
+		return false, "TorForge not running (no control port file)"
+	}
+
+	port := strings.TrimSpace(string(data))
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+port, 5*time.Second)
+	if err != nil {
+		return false, fmt.Sprintf("Cannot connect to Tor control port %s: %v", port, err)
 	}
 	conn.Close()
-	return true, "Tor control port responding"
+	return true, fmt.Sprintf("Tor control port %s responding", port)
 }
 
 func runAIStats(cmd *cobra.Command, args []string) error {

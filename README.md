@@ -98,6 +98,29 @@ sudo torforge install-systemd
 sudo systemctl enable torforge
 ```
 
+### Uninstall
+```bash
+# Stop TorForge if running
+sudo torforge stop
+
+# Remove binary
+sudo rm /usr/local/bin/torforge
+
+# Remove configuration
+sudo rm -rf /etc/torforge
+
+# Remove runtime data
+sudo rm -rf /var/lib/torforge
+
+# Remove logs
+sudo rm -rf /var/log/torforge
+
+# Remove systemd service (if installed)
+sudo systemctl disable torforge
+sudo rm /etc/systemd/system/torforge.service
+sudo systemctl daemon-reload
+```
+
 ---
 
 ## 🎯 Quick Start

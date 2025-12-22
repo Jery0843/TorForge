@@ -190,7 +190,7 @@ func initLogger() error {
 
 func runTor(cmd *cobra.Command, args []string) error {
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("torforge requires root privileges. Please run with sudo.")
+		return fmt.Errorf("torforge requires root privileges, please run with sudo")
 	}
 
 	if err := initLogger(); err != nil {
@@ -639,7 +639,7 @@ func runNewCircuit(cmd *cobra.Command, args []string) error {
 
 func runStop(cmd *cobra.Command, args []string) error {
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("torforge requires root privileges. Please run with sudo.")
+		return fmt.Errorf("torforge requires root privileges, please run with sudo")
 	}
 
 	if err := initLogger(); err != nil {

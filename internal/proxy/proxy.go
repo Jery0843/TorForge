@@ -11,7 +11,6 @@ import (
 	"github.com/jery0843/torforge/internal/api"
 	"github.com/jery0843/torforge/internal/bypass"
 	"github.com/jery0843/torforge/internal/netfilter"
-	"github.com/jery0843/torforge/internal/netns"
 	"github.com/jery0843/torforge/internal/security"
 	"github.com/jery0843/torforge/internal/tor"
 	"github.com/jery0843/torforge/pkg/config"
@@ -23,12 +22,8 @@ type Proxy struct {
 	cfg         *config.Config
 	torMgr      *tor.Manager
 	iptables    *netfilter.IPTablesManager
-	tproxy      *netfilter.TProxyManager
 	dnsResolver *netfilter.DNSResolver
-	fakeDNS     *netfilter.FakeDNSServer
 	bypassEng   *bypass.Engine
-	smartBypass *bypass.SmartBypass
-	nsMgr       *netns.Manager
 	apiServer   *api.Server
 
 	// AI modules

@@ -299,7 +299,7 @@ func (m *Manager) GetExitIP() (string, error) {
 	m.mu.RUnlock()
 
 	if !running {
-		return "", fmt.Errorf("Tor not running")
+		return "", fmt.Errorf("tor not running")
 	}
 
 	// Use curl with SOCKS5 proxy to get exit IP

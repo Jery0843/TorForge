@@ -113,19 +113,19 @@ type Circuit struct {
 
 // Model is the Bubble Tea model for the dashboard
 type Model struct {
-	stats       Stats
-	circuits    []Circuit
-	connections []Connection
-	logs        []string
-	spinner     spinner.Model
-	table       table.Model
-	help        help.Model
-	keys        KeyMap
-	width       int
-	height      int
-	currentTab  int
-	showHelp    bool
-	lastUpdate  time.Time
+	stats        Stats
+	circuits     []Circuit
+	_connections []Connection // Reserved for active connection display
+	logs         []string
+	spinner      spinner.Model
+	table        table.Model
+	help         help.Model
+	keys         KeyMap
+	width        int
+	height       int
+	currentTab   int
+	showHelp     bool
+	lastUpdate   time.Time
 
 	// Channels for updates
 	updateCh  chan Stats

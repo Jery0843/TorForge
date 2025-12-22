@@ -41,8 +41,8 @@ type DecoyTrafficGenerator struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	// HTTP client via Tor
-	client *http.Client
+	// HTTP client via Tor (reserved for future SOCKS-aware requests)
+	_client *http.Client
 }
 
 // Popular sites to generate decoy traffic to

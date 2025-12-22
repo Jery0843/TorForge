@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -363,9 +362,4 @@ func (sb *SmartBypass) ClearPatterns() {
 	sb.patterns = make(map[string]*TrafficPattern)
 	sb.stats = make(map[string]*ConnectionStats)
 	os.Remove(sb.patternsFile)
-}
-
-// domainParts splits a domain into parts
-func domainParts(domain string) []string {
-	return strings.Split(strings.TrimSuffix(domain, "."), ".")
 }

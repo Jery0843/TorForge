@@ -28,7 +28,7 @@ type Namespace struct {
 	IPHost     string
 	IPNS       string
 	SOCKSProxy string
-	mu         sync.Mutex
+	_mu        sync.Mutex // Reserved for future thread-safety
 	active     bool
 }
 

@@ -410,8 +410,8 @@ func (m *IPTablesManager) Rollback() error {
 	}
 
 	for _, c := range chains {
-		exists, _ := m.ipt.ChainExists(c.table, c.chain)
-		if exists {
+		exists, err := m.ipt.ChainExists(c.table, c.chain)
+		if err == nil && exists {
 			m.ipt.ClearChain(c.table, c.chain)
 			m.ipt.DeleteChain(c.table, c.chain)
 		}

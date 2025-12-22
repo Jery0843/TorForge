@@ -908,9 +908,16 @@ func runAIBypass(cmd *cobra.Command, args []string) error {
 	custom.Speed[strings.ToLower(domain)] = true
 
 	// Save
-	os.MkdirAll(aiDataDir, 0700)
-	data, _ := json.MarshalIndent(custom, "", "  ")
-	os.WriteFile(customFile, data, 0600)
+	if err := os.MkdirAll(aiDataDir, 0700); err != nil {
+		return fmt.Errorf("failed to create AI data directory: %w", err)
+	}
+	data, err := json.MarshalIndent(custom, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal data: %w", err)
+	}
+	if err := os.WriteFile(customFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
 
 	fmt.Printf("✅ Added '%s' to speed bypass list (will use direct connection)\n", domain)
 	return nil
@@ -937,9 +944,16 @@ func runAISensitive(cmd *cobra.Command, args []string) error {
 	custom.Sensitive[strings.ToLower(domain)] = true
 
 	// Save
-	os.MkdirAll(aiDataDir, 0700)
-	data, _ := json.MarshalIndent(custom, "", "  ")
-	os.WriteFile(customFile, data, 0600)
+	if err := os.MkdirAll(aiDataDir, 0700); err != nil {
+		return fmt.Errorf("failed to create AI data directory: %w", err)
+	}
+	data, err := json.MarshalIndent(custom, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal data: %w", err)
+	}
+	if err := os.WriteFile(customFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
 
 	fmt.Printf("✅ Added '%s' to sensitive list (will always use Tor)\n", domain)
 	return nil

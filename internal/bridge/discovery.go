@@ -372,21 +372,30 @@ func (bd *BridgeDiscovery) loadBridges() {
 	path := filepath.Join(bd.dataDir, "bridges.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return
+		return // No cached bridges yet
 	}
 
-	json.Unmarshal(data, &bd.bridges)
+	if err := json.Unmarshal(data, &bd.bridges); err != nil {
+		return // Invalid cache, start fresh
+	}
 }
 
-// saveBridges saves bridges to disk
+// saveBridges saves bridges to disk (best-effort)
 func (bd *BridgeDiscovery) saveBridges() {
 	bd.mu.RLock()
 	defer bd.mu.RUnlock()
 
-	os.MkdirAll(bd.dataDir, 0700)
+	if err := os.MkdirAll(bd.dataDir, 0700); err != nil {
+		return // Can't create directory
+	}
+
 	path := filepath.Join(bd.dataDir, "bridges.json")
-	data, _ := json.MarshalIndent(bd.bridges, "", "  ")
-	os.WriteFile(path, data, 0600)
+	data, err := json.MarshalIndent(bd.bridges, "", "  ")
+	if err != nil {
+		return // Marshal failed
+	}
+
+	_ = os.WriteFile(path, data, 0600) // Best-effort save
 }
 
 // AutoDiscover performs automatic bridge discovery if censorship is detected

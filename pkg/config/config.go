@@ -240,7 +240,10 @@ func GetConfigDir() string {
 	if xdgConfig := os.Getenv("XDG_CONFIG_HOME"); xdgConfig != "" {
 		return filepath.Join(xdgConfig, "torforge")
 	}
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "/tmp/torforge/config" // Fallback
+	}
 	return filepath.Join(home, ".config", "torforge")
 }
 
@@ -249,7 +252,10 @@ func GetDataDir() string {
 	if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
 		return filepath.Join(xdgData, "torforge")
 	}
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "/tmp/torforge/data" // Fallback
+	}
 	return filepath.Join(home, ".local", "share", "torforge")
 }
 

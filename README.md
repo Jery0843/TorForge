@@ -22,7 +22,7 @@ TorForge is a transparent Tor proxy that routes all system traffic through the T
 
 ### Key Highlights
 - **Zero-config transparent proxying** - Works with any application
-- **10,000+ lines of Go** - Production-quality codebase
+- **10,000+ lines of Go** - Quality codebase
 - **10 internal packages** - Modular architecture
 - **AI-powered optimization** - Smart circuit selection and split-tunneling
 - **Post-quantum ready** - CRYSTALS-Kyber768 encryption

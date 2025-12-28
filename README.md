@@ -237,7 +237,7 @@ sudo torforge stop
 
 ---
 
-### `torforge tor` — Start Proxy
+### `torforge tor` - Start Proxy
 
 ```bash
 sudo torforge tor [flags]
@@ -289,7 +289,7 @@ sudo torforge tor \
 
 ---
 
-### `torforge status` — Live Dashboard
+### `torforge status` - Live Dashboard
 
 ```bash
 sudo torforge status
@@ -310,7 +310,7 @@ Commands:
 
 ---
 
-### `torforge ai` — AI Management
+### `torforge ai` - AI Management
 
 ```bash
 # View learning statistics
@@ -328,7 +328,7 @@ sudo torforge ai sensitive secret.example.com
 
 ---
 
-### `torforge app` — Single App Through Tor
+### `torforge app` - Single App Through Tor
 
 ```bash
 # Run Firefox through Tor
@@ -343,7 +343,7 @@ sudo torforge app wget https://example.com/file.zip
 
 ---
 
-### `torforge test` — Leak Detection
+### `torforge test` - Leak Detection
 
 ```bash
 sudo torforge test

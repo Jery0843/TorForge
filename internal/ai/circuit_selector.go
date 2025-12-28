@@ -9,6 +9,9 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/jery0843/torforge/internal/ai/ml"
+	"github.com/jery0843/torforge/pkg/logger"
 )
 
 // CircuitPerformance stores performance metrics for a circuit/exit
@@ -33,14 +36,18 @@ type DestinationPerf struct {
 	SampleCount  int     `json:"sample_count"`
 }
 
-// SmartCircuitSelector uses ML-like algorithms to select optimal circuits
+// SmartCircuitSelector uses neural network to select optimal circuits
 type SmartCircuitSelector struct {
 	mu sync.RWMutex
 
 	// Historical performance data
 	exitPerformance map[string]*CircuitPerformance
 
-	// Prediction weights (learned over time)
+	// Neural network model for quality prediction
+	mlModel   *ml.QualityModel
+	mlEnabled bool
+
+	// Fallback prediction weights (used when ML not ready)
 	latencyWeight   float64
 	bandwidthWeight float64
 	successWeight   float64
@@ -51,6 +58,11 @@ type SmartCircuitSelector struct {
 	learningRate float64
 	decayFactor  float64
 	minSamples   int
+
+	// Exclusion TTL tracking
+	exclusionStartTime time.Time
+	cachedAvoidExits   []string
+	exclusionTTL       time.Duration
 
 	// Real-time metrics
 	currentCircuits map[string]*LiveCircuitMetrics
@@ -68,22 +80,38 @@ type LiveCircuitMetrics struct {
 	AvgRTT       float64
 }
 
-// NewSmartCircuitSelector creates a new AI circuit selector
+// NewSmartCircuitSelector creates a new AI circuit selector with neural network
 func NewSmartCircuitSelector(dataDir string) *SmartCircuitSelector {
+	log := logger.WithComponent("ai")
+
 	s := &SmartCircuitSelector{
 		exitPerformance: make(map[string]*CircuitPerformance),
 		currentCircuits: make(map[string]*LiveCircuitMetrics),
 		dataDir:         dataDir,
 
-		// Initial weights (will be tuned by learning)
+		// Fallback weights (used when ML not available)
 		latencyWeight:   0.35,
 		bandwidthWeight: 0.30,
 		successWeight:   0.25,
 		recencyWeight:   0.10,
 
 		learningRate: 0.1,
-		decayFactor:  0.95, // Old data becomes less important
+		decayFactor:  0.95,
 		minSamples:   5,
+
+		// Exclusion TTL - re-evaluate bad exits after 1 hour
+		exclusionTTL: 1 * time.Hour,
+	}
+
+	// Initialize neural network model
+	mlModel, err := ml.NewQualityModel(filepath.Join(dataDir, "ml"))
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to initialize ML model, using heuristics")
+		s.mlEnabled = false
+	} else {
+		s.mlModel = mlModel
+		s.mlEnabled = true
+		log.Info().Msg("🧠 Neural network circuit selector initialized")
 	}
 
 	// Load historical data
@@ -137,6 +165,20 @@ func (s *SmartCircuitSelector) RecordCircuitPerformance(
 		destPerf.SampleCount++
 	}
 
+	// Feed to neural network for online learning
+	if s.mlEnabled && s.mlModel != nil {
+		features := ml.CircuitFeatures{
+			LatencyNorm:   ml.NormalizeLatency(latencyMs),
+			BandwidthNorm: ml.NormalizeBandwidth(bandwidthKbps),
+			SuccessRate:   successVal,
+			TimeOfDay:     ml.NormalizeTimeOfDay(time.Now()),
+			SampleCount:   ml.NormalizeSamples(perf.SampleCount),
+			Recency:       1.0, // Just observed = maximum recency
+		}
+		actualQuality := ml.ComputeActualQuality(latencyMs, bandwidthKbps, success)
+		s.mlModel.RecordObservation(features, actualQuality)
+	}
+
 	// Persist periodically
 	if perf.SampleCount%10 == 0 {
 		go s.saveData()
@@ -178,8 +220,38 @@ func (s *SmartCircuitSelector) PredictBestExits(destination string, count int) [
 	return result
 }
 
-// calculateScore computes a performance score for an exit
+// calculateScore computes a performance score for an exit using neural network if available
 func (s *SmartCircuitSelector) calculateScore(perf *CircuitPerformance, destination string) float64 {
+	log := logger.WithComponent("ai")
+
+	// Try neural network prediction first
+	if s.mlEnabled && s.mlModel != nil {
+		features := ml.CircuitFeatures{
+			LatencyNorm:   ml.NormalizeLatency(perf.AvgLatency),
+			BandwidthNorm: ml.NormalizeBandwidth(perf.AvgBandwidth),
+			SuccessRate:   perf.SuccessRate,
+			TimeOfDay:     ml.NormalizeTimeOfDay(time.Now()),
+			SampleCount:   ml.NormalizeSamples(perf.SampleCount),
+			Recency:       ml.NormalizeRecency(perf.LastUpdated),
+		}
+
+		score, err := s.mlModel.Predict(features)
+		if err == nil {
+			log.Debug().
+				Str("exit", perf.ExitFingerprint[:8]).
+				Float64("ml_score", score).
+				Msg("🧠 ML prediction used for circuit scoring")
+			return score
+		}
+		log.Debug().Err(err).Msg("ML prediction failed, using heuristics")
+		// Fall through to heuristics on error
+	}
+
+	// Fallback: heuristic-based scoring
+	log.Debug().
+		Str("exit", perf.ExitFingerprint[:8]).
+		Bool("ml_enabled", s.mlEnabled).
+		Msg("📊 Using heuristic scoring (ML not available)")
 	// Normalize metrics (lower latency = higher score, higher bandwidth = higher score)
 	latencyScore := 1.0 / (1.0 + perf.AvgLatency/1000.0)    // Sigmoid-like normalization
 	bandwidthScore := math.Log10(perf.AvgBandwidth+1) / 5.0 // Log scale, max ~5000 kbps
@@ -296,4 +368,247 @@ func (s *SmartCircuitSelector) DecayOldData() {
 			}
 		}
 	}
+}
+
+// ExitRecommendation contains ML-based exit node recommendations
+type ExitRecommendation struct {
+	PreferredExits []string  // High-scoring exits (top 20%)
+	AvoidExits     []string  // Low-scoring exits (bottom 20%) - temporary exclusion
+	AvoidUntil     time.Time // When to re-evaluate avoided exits
+	Confidence     float64   // Model confidence (based on sample count)
+}
+
+// GetExitRecommendations returns ML-based exit node recommendations
+// These can be used to influence Tor's exit selection
+func (s *SmartCircuitSelector) GetExitRecommendations() *ExitRecommendation {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	log := logger.WithComponent("ai")
+
+	if !s.mlEnabled || s.mlModel == nil {
+		return nil
+	}
+
+	type exitScore struct {
+		fingerprint string
+		score       float64
+		sampleCount int
+	}
+
+	var scores []exitScore
+	totalSamples := 0
+
+	for fp, perf := range s.exitPerformance {
+		if perf.SampleCount < s.minSamples {
+			continue
+		}
+
+		score := s.calculateScore(perf, "")
+		scores = append(scores, exitScore{fp, score, perf.SampleCount})
+		totalSamples += perf.SampleCount
+	}
+
+	if len(scores) < 3 {
+		// Not enough data to make recommendations
+		return nil
+	}
+
+	// Sort by score (higher is better)
+	sort.Slice(scores, func(i, j int) bool {
+		return scores[i].score > scores[j].score
+	})
+
+	// Calculate thresholds (top 20% = preferred, bottom 20% = avoid)
+	// Limit to max 5 to preserve anonymity and prevent Tor issues
+	topN := len(scores) / 5
+	if topN < 1 {
+		topN = 1
+	}
+	if topN > 5 {
+		topN = 5
+	}
+	bottomN := len(scores) / 5
+	if bottomN < 1 {
+		bottomN = 1
+	}
+	if bottomN > 5 {
+		bottomN = 5 // Max 5 exclusions to preserve anonymity
+	}
+
+	// Check if current exclusions have expired (TTL passed)
+	exclusionsExpired := false
+	if !s.exclusionStartTime.IsZero() && time.Since(s.exclusionStartTime) > s.exclusionTTL {
+		exclusionsExpired = true
+		log.Info().
+			Dur("elapsed", time.Since(s.exclusionStartTime)).
+			Msg("🔄 Exclusion TTL expired - re-evaluating exit nodes")
+	}
+
+	rec := &ExitRecommendation{
+		PreferredExits: make([]string, 0, topN),
+		AvoidExits:     make([]string, 0, bottomN),
+		AvoidUntil:     s.exclusionStartTime.Add(s.exclusionTTL),
+		Confidence:     float64(totalSamples) / 250.0, // Need 250 samples for full confidence
+	}
+
+	if rec.Confidence > 1.0 {
+		rec.Confidence = 1.0
+	}
+
+	// Top performers
+	for i := 0; i < topN && i < len(scores); i++ {
+		rec.PreferredExits = append(rec.PreferredExits, scores[i].fingerprint)
+	}
+
+	// Poor performers (only if confidence is high enough - need 250+ samples)
+	// Also reset if TTL expired to give exits another chance
+	if rec.Confidence >= 1.0 && !exclusionsExpired {
+		// Use cached exclusions if we have them and TTL hasn't expired
+		if len(s.cachedAvoidExits) > 0 {
+			rec.AvoidExits = s.cachedAvoidExits
+		} else {
+			// Calculate new exclusions
+			for i := len(scores) - bottomN; i < len(scores); i++ {
+				if i >= 0 {
+					rec.AvoidExits = append(rec.AvoidExits, scores[i].fingerprint)
+				}
+			}
+			// Cache exclusions and set start time (need write lock for this)
+			// Note: This is done in a separate goroutine to avoid holding RLock
+			if len(rec.AvoidExits) > 0 {
+				go s.cacheExclusions(rec.AvoidExits)
+			}
+		}
+	} else if exclusionsExpired {
+		// Clear cached exclusions - they get a fresh chance
+		go s.clearExclusions()
+	}
+
+	log.Info().
+		Int("preferred", len(rec.PreferredExits)).
+		Int("avoid", len(rec.AvoidExits)).
+		Float64("confidence", rec.Confidence).
+		Bool("ttl_expired", exclusionsExpired).
+		Msg("🧠 ML exit recommendations generated")
+
+	return rec
+}
+
+// cacheExclusions stores exclusions and sets the TTL start time
+func (s *SmartCircuitSelector) cacheExclusions(exits []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	log := logger.WithComponent("ai")
+
+	s.cachedAvoidExits = exits
+	s.exclusionStartTime = time.Now()
+
+	log.Info().
+		Int("count", len(exits)).
+		Time("expires_at", s.exclusionStartTime.Add(s.exclusionTTL)).
+		Msg("🔒 Cached exit exclusions with TTL")
+}
+
+// clearExclusions removes cached exclusions after TTL expires
+func (s *SmartCircuitSelector) clearExclusions() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	log := logger.WithComponent("ai")
+
+	prevCount := len(s.cachedAvoidExits)
+	s.cachedAvoidExits = nil
+	s.exclusionStartTime = time.Time{} // Reset to zero time
+
+	log.Info().
+		Int("cleared_count", prevCount).
+		Msg("🔓 Cleared exit exclusions - exits get fresh chance")
+}
+
+// GetTorExitConfig returns Tor configuration lines for exit preferences
+// Returns lines that can be added to torrc
+func (s *SmartCircuitSelector) GetTorExitConfig() []string {
+	rec := s.GetExitRecommendations()
+	if rec == nil {
+		return nil
+	}
+
+	var config []string
+
+	// Only modify exit selection if confidence is high enough
+	if rec.Confidence < 0.3 {
+		return nil
+	}
+
+	// Prefer good exits (soft preference)
+	if len(rec.PreferredExits) > 0 {
+		// Note: This is informational - Tor doesn't have a "prefer" directive
+		// We can use this info for logging/monitoring
+	}
+
+	// Temporarily avoid bad exits
+	if len(rec.AvoidExits) > 0 && time.Now().Before(rec.AvoidUntil) {
+		// ExcludeExitNodes takes fingerprints
+		excludeList := ""
+		for i, fp := range rec.AvoidExits {
+			if i > 0 {
+				excludeList += ","
+			}
+			excludeList += "$" + fp // $ prefix for fingerprint
+		}
+		config = append(config, "ExcludeExitNodes "+excludeList)
+	}
+
+	return config
+}
+
+// ShouldAvoidExit returns true if an exit should currently be avoided
+func (s *SmartCircuitSelector) ShouldAvoidExit(fingerprint string) bool {
+	rec := s.GetExitRecommendations()
+	if rec == nil {
+		return false
+	}
+
+	// Check if exclusion has expired
+	if time.Now().After(rec.AvoidUntil) {
+		return false // Give it another chance
+	}
+
+	for _, fp := range rec.AvoidExits {
+		if fp == fingerprint {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetMLStats returns AI/ML statistics for display
+func (s *SmartCircuitSelector) GetMLStats() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	stats := map[string]interface{}{
+		"ml_enabled":    s.mlEnabled,
+		"exits_tracked": len(s.exitPerformance),
+		"min_samples":   s.minSamples,
+	}
+
+	if s.mlEnabled && s.mlModel != nil {
+		modelStats := s.mlModel.GetStats()
+		for k, v := range modelStats {
+			stats["ml_"+k] = v
+		}
+	}
+
+	rec := s.GetExitRecommendations()
+	if rec != nil {
+		stats["preferred_exits"] = len(rec.PreferredExits)
+		stats["avoid_exits"] = len(rec.AvoidExits)
+		stats["confidence"] = rec.Confidence
+	}
+
+	return stats
 }

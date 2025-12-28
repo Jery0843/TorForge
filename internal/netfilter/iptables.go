@@ -393,10 +393,8 @@ func (m *IPTablesManager) Rollback() error {
 	// Remove rules in reverse order (from current session)
 	for i := len(m.savedRules) - 1; i >= 0; i-- {
 		r := m.savedRules[i]
-		if err := m.ipt.Delete(r.table, r.chain, r.rule...); err != nil {
-			// Don't warn on expected "rule doesn't exist" errors
-			log.Debug().Err(err).Str("table", r.table).Str("chain", r.chain).Msg("rule cleanup")
-		}
+		// Silently ignore errors - rules may already be gone during cleanup
+		_ = m.ipt.Delete(r.table, r.chain, r.rule...)
 	}
 
 	// Flush and delete custom chains

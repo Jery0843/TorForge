@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cretz/bine/control"
 	"github.com/cretz/bine/tor"
 	"github.com/jery0843/torforge/pkg/config"
 	"github.com/jery0843/torforge/pkg/logger"
@@ -249,12 +250,9 @@ func (m *Manager) Stop() error {
 	}
 
 	if m.tor != nil {
-		if err := m.tor.Close(); err != nil {
-			// Only warn if it's not the expected EOF error
-			if err.Error() != "" {
-				log.Debug().Err(err).Msg("Tor close completed")
-			}
-		}
+		// Errors during close are expected (broken pipe, process killed)
+		// Silently ignore them
+		_ = m.tor.Close()
 	}
 
 	m.running = false
@@ -412,4 +410,60 @@ func GetTorVersion() (string, error) {
 		return "", err
 	}
 	return string(output), nil
+}
+
+// SetExcludeExitNodes sets exit nodes to avoid based on ML recommendations
+// This dynamically updates Tor's configuration via the control port
+func (m *Manager) SetExcludeExitNodes(fingerprints []string) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.tor == nil || m.tor.Control == nil {
+		return fmt.Errorf("not connected to Tor")
+	}
+
+	log := logger.WithComponent("tor")
+
+	if len(fingerprints) == 0 {
+		// Clear exclusions
+		err := m.tor.Control.SetConf(&control.KeyVal{Key: "ExcludeExitNodes", Val: ""})
+		if err != nil {
+			return fmt.Errorf("failed to clear ExcludeExitNodes: %w", err)
+		}
+		log.Info().Msg("🧠 ML: cleared exit node exclusions")
+		return nil
+	}
+
+	// Build exclusion list - Tor accepts IPs or fingerprints
+	// Our keys are stored as "exit_<IP>" so we need to extract the IP
+	excludeList := ""
+	for i, exitKey := range fingerprints {
+		if i > 0 {
+			excludeList += ","
+		}
+		// Strip "exit_" prefix if present to get the IP
+		ip := exitKey
+		if len(exitKey) > 5 && exitKey[:5] == "exit_" {
+			ip = exitKey[5:]
+		}
+		excludeList += ip
+	}
+
+	// Apply via control port
+	err := m.tor.Control.SetConf(&control.KeyVal{Key: "ExcludeExitNodes", Val: excludeList})
+	if err != nil {
+		return fmt.Errorf("failed to set ExcludeExitNodes: %w", err)
+	}
+
+	log.Info().
+		Int("count", len(fingerprints)).
+		Str("exits", excludeList).
+		Msg("🧠 ML: excluded bad exit nodes")
+
+	return nil
+}
+
+// ClearExcludeExitNodes removes all ML-based exit exclusions
+func (m *Manager) ClearExcludeExitNodes() error {
+	return m.SetExcludeExitNodes(nil)
 }

@@ -36,7 +36,7 @@ TorForge is a transparent Tor proxy that routes all system traffic through the T
 |---------|-------------|
 | **Transparent Proxy** | All TCP/DNS traffic automatically routed through Tor |
 | **Kill Switch** | Default DROP policy prevents any IP leaks |
-| **IPv6 Blocking** | Complete IPv6 leak protection |
+| **IPv6 Routing** | IPv6 traffic routed through Tor (with kill switch) |
 | **ICMP Blocking** | Ping requests blocked to prevent leaks |
 | **Multi-Circuit** | Concurrent circuit support for better performance |
 | **Auto-Rotation** | Automatically change exit IP on schedule |
@@ -396,7 +396,7 @@ emergency exit - all connections terminated
 |---------------|------------|
 | TCP IP Leak | iptables forces all TCP through Tor |
 | UDP IP Leak | UDP blocked except Tor DNS |
-| IPv6 IP Leak | IPv6 completely blocked |
+| IPv6 IP Leak | IPv6 routed through Tor (kill switch blocks leaks) |
 | ICMP Leak | Ping blocked |
 | DNS Leak | DNS forced through Tor |
 | Traffic Analysis | Decoy traffic + steganography |
@@ -479,7 +479,7 @@ tor:
 
 security:
   kill_switch: true
-  block_ipv6: true
+  route_ipv6: true  # Routes through Tor instead of blocking
 
 ai:
   enabled: true
@@ -541,7 +541,7 @@ MIT License - See [LICENSE](LICENSE)
 | Threat | Status |
 |--------|--------|
 | DNS leaks | ✅ Forced through Tor |
-| IPv6 leaks | ✅ Completely blocked |
+| IPv6 leaks | ✅ Routed through Tor (kill switch active) |
 | UDP leaks | ✅ Blocked |
 | App bypass | ✅ Kernel-level capture |
 | Kill switch bypass | ✅ Default DROP |

@@ -18,7 +18,7 @@
 
 ## 🚀 Overview
 
-TorForge is a production-ready transparent Tor proxy that routes all system traffic through the Tor network. Unlike traditional Tor setups, TorForge operates at the kernel level using iptables, ensuring zero application configuration and complete traffic capture.
+TorForge is a transparent Tor proxy that routes all system traffic through the Tor network. Unlike traditional Tor setups, TorForge operates at the kernel level using iptables, ensuring zero application configuration and complete traffic capture.
 
 ### Key Highlights
 - **Zero-config transparent proxying** - Works with any application

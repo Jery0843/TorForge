@@ -128,6 +128,8 @@ func init() {
 	torCmd.Flags().String("panic-key", "", "dead man's switch key (e.g., F12) for emergency shutdown")
 	torCmd.Flags().Bool("race", false, "race multiple circuits on startup, use fastest")
 	torCmd.Flags().Int("race-circuits", 5, "number of circuits to race (default: 5)")
+	torCmd.Flags().Bool("no-ai", false, "disable AI-based exit selection (paranoid anonymity mode)")
+	torCmd.Flags().Bool("keep-root", false, "stay root instead of dropping privileges (less secure)")
 
 	// App proxy flags
 	appCmd := &cobra.Command{
@@ -291,6 +293,14 @@ func runTor(cmd *cobra.Command, args []string) error {
 
 	// Show active features
 	fmt.Printf("\n🧅 TorForge Active\n")
+	fmt.Println("   🔐 iptables configured (was root, now dropping privileges)")
+	fmt.Println("   💡 Rootless alternative: torforge app <command>")
+
+	// Show --no-ai status
+	noAI, _ := cmd.Flags().GetBool("no-ai")
+	if noAI {
+		fmt.Println("   🔒 AI exit selection: DISABLED (paranoid mode)")
+	}
 
 	// Check for special features
 	postQuantum, _ := cmd.Flags().GetBool("post-quantum")
@@ -403,6 +413,23 @@ func runTor(cmd *cobra.Command, args []string) error {
 	fmt.Printf("   Exit IP:  %s\n", exitIP)
 	fmt.Printf("   Circuits: %d\n", activeCircuits)
 
+	// Privilege dropping (default security feature - drops to unprivileged user)
+	var privMgr *security.PrivilegeManager
+	keepRoot, _ := cmd.Flags().GetBool("keep-root")
+	if !keepRoot && security.CanDropPrivileges() {
+		privMgr = security.NewPrivilegeManager()
+		targetUser := security.GetDroppedUser()
+		if err := privMgr.DropPrivileges(targetUser); err != nil {
+			log.Warn().Err(err).Msg("failed to drop privileges")
+			fmt.Println("   ⚠️  Privilege drop failed (continuing as root)")
+		} else {
+			fmt.Printf("   🔒 Privileges dropped to user: %s\n", targetUser)
+			fmt.Println("   📋 Cleanup will prompt for sudo")
+		}
+	} else if keepRoot {
+		fmt.Println("   ⚠️  Running as root (--keep-root specified)")
+	}
+
 	// Start auto-rotation if enabled
 	rotateMinutes, _ := cmd.Flags().GetInt("rotate-circuit")
 	if rotateMinutes > 0 {
@@ -447,8 +474,9 @@ func runTor(cmd *cobra.Command, args []string) error {
 								Float64("confidence", rec.Confidence).
 								Msg("🧠 ML exit recommendations active")
 
-							// ACTIVE EXCLUSION: Feed bad exits to Tor
-							if len(rec.AvoidExits) > 0 && rec.Confidence > 0.3 {
+							// ACTIVE EXCLUSION: Feed bad exits to Tor (disabled with --no-ai)
+							noAI, _ := cmd.Flags().GetBool("no-ai")
+							if !noAI && len(rec.AvoidExits) > 0 && rec.Confidence > 0.3 {
 								if torMgr := p.GetTorManager(); torMgr != nil {
 									if err := torMgr.SetExcludeExitNodes(rec.AvoidExits); err != nil {
 										log.Warn().Err(err).Msg("failed to set exit exclusions")
@@ -470,7 +498,47 @@ func runTor(cmd *cobra.Command, args []string) error {
 		}()
 	}
 
-	fmt.Printf("\n   Press Ctrl+C to stop\n\n")
+	fmt.Printf("\n   Press 'q' to stop\n\n")
+
+	// Start keyboard listener for 'q' to quit
+	// Use /dev/tty directly and raw mode for single-key input
+	go func() {
+		// Open /dev/tty directly (separate from stdin)
+		tty, err := os.OpenFile("/dev/tty", os.O_RDONLY, 0)
+		if err != nil {
+			log.Debug().Err(err).Msg("cannot open /dev/tty for keyboard input")
+			return
+		}
+		defer tty.Close()
+
+		// Set raw mode using stty (simple approach)
+		rawCmd := exec.Command("stty", "-F", "/dev/tty", "raw", "-echo")
+		rawCmd.Run()
+
+		// Restore on exit
+		defer func() {
+			restoreCmd := exec.Command("stty", "-F", "/dev/tty", "sane")
+			restoreCmd.Run()
+		}()
+
+		buf := make([]byte, 1)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				n, err := tty.Read(buf)
+				if err != nil || n == 0 {
+					continue
+				}
+				if buf[0] == 'q' || buf[0] == 'Q' {
+					log.Info().Msg("quit key pressed, shutting down")
+					cancel()
+					return
+				}
+			}
+		}
+	}()
 
 	// Wait for shutdown
 	<-ctx.Done()
@@ -515,8 +583,20 @@ func runTor(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := p.Stop(); err != nil {
-		log.Error().Err(err).Msg("error during shutdown")
+	// Cleanup with privilege handling
+	if privMgr != nil && privMgr.IsDropped() {
+		// We dropped privileges, need sudo for cleanup
+		log.Info().Msg("requesting elevated privileges for iptables cleanup...")
+		fmt.Println("\n🔓 Requesting sudo for iptables cleanup...")
+		if err := privMgr.RunCleanupAsRoot(); err != nil {
+			log.Error().Err(err).Msg("cleanup failed - run 'sudo torforge stop' manually")
+			fmt.Println("⚠️  Cleanup failed. Run 'sudo torforge stop' manually to restore network.")
+		}
+	} else {
+		// Still root, do normal cleanup
+		if err := p.Stop(); err != nil {
+			log.Error().Err(err).Msg("error during shutdown")
+		}
 	}
 
 	log.Info().Msg("TorForge stopped")

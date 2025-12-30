@@ -264,6 +264,8 @@ sudo torforge tor [flags]
 | `--no-kill-switch` | `-k` | Disable kill switch | off |
 | `--use-system-tor` | `-S` | Use existing Tor instance | off |
 | `--daemon` | `-d` | Run as background daemon | off |
+| `--no-ai` | | Disable AI exit selection (paranoid mode) | off |
+| `--keep-root` | | Stay root, don't drop privileges | off |
 
 #### Examples
 
@@ -420,6 +422,53 @@ emergency exit - all connections terminated
 | Emergency | Dead man's switch |
 
 ---
+
+### 🔒 Privilege Separation Model
+
+TorForge uses a multi-layer privilege separation approach:
+
+| Component | User | Purpose |
+|-----------|------|---------|
+| **TorForge** | `SUDO_USER` (your user) | Main process, drops after iptables setup |
+| **Tor daemon** | `debian-tor` | Network operations (if user exists) |
+| **iptables** | root | Only during setup and cleanup (via sudo) |
+
+#### How It Works
+
+1. **Start** → `sudo torforge tor` (needs root for iptables)
+2. **Setup** → iptables rules applied as root
+3. **Tor** → Spawns as `debian-tor` user (if available)
+4. **Drop** → TorForge drops privileges to your user
+5. **Cleanup** → Prompts for sudo to remove iptables
+
+#### Recommended Setup
+
+For maximum security, install the `tor` package to create the `debian-tor` user:
+
+```bash
+# Debian/Ubuntu/Kali
+sudo apt install tor
+
+# This creates the debian-tor user automatically
+```
+
+When `debian-tor` exists, Tor will run unprivileged. Without it, Tor runs as root with a warning.
+
+#### Security Flags
+
+| Flag | Description |
+|------|-------------|
+| `--no-ai` | Disable ML exit selection (paranoid mode) |
+| `--keep-root` | Don't drop privileges (not recommended) |
+
+```bash
+# Maximum security mode
+sudo torforge tor --no-ai
+
+# Verify privilege drop
+ps aux | grep torforge
+# Should show: jerry (your user), not root
+```
 
 ## 🏗️ Architecture
 

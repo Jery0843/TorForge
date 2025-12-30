@@ -15,6 +15,7 @@ import (
 
 	"github.com/cretz/bine/control"
 	"github.com/cretz/bine/tor"
+	"github.com/jery0843/torforge/internal/security"
 	"github.com/jery0843/torforge/pkg/config"
 	"github.com/jery0843/torforge/pkg/logger"
 )
@@ -27,6 +28,7 @@ type Manager struct {
 	running   bool
 	circuits  *CircuitManager
 	startTime time.Time
+	torUser   *security.TorUserInfo // Detected Tor user for unprivileged operation
 }
 
 // NewManager creates a new Tor manager
@@ -59,9 +61,30 @@ func (m *Manager) Start(ctx context.Context) error {
 func (m *Manager) startEmbeddedTor(ctx context.Context) error {
 	log := logger.WithComponent("tor")
 
+	// Check for existing Tor user (debian-tor, tor, _tor)
+	m.torUser = security.GetExistingTorUser()
+	if m.torUser != nil {
+		log.Info().
+			Str("user", m.torUser.Username).
+			Int("uid", m.torUser.UID).
+			Msg("🔐 Found existing Tor user, will set permissions")
+	} else {
+		log.Warn().Msg("⚠️  No dedicated Tor user found (debian-tor/tor), Tor will run as root")
+	}
+
 	// Ensure data directory exists
 	if err := os.MkdirAll(m.cfg.DataDir, 0700); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	// Set data directory ownership if we have a Tor user
+	if m.torUser != nil {
+		cmd := exec.Command("chown", "-R",
+			fmt.Sprintf("%d:%d", m.torUser.UID, m.torUser.GID),
+			m.cfg.DataDir)
+		if err := cmd.Run(); err != nil {
+			log.Warn().Err(err).Msg("failed to set data directory ownership")
+		}
 	}
 
 	// Generate torrc WITHOUT ControlPort - bine manages that
@@ -145,6 +168,11 @@ func (m *Manager) generateTorrcForBine() string {
 	// NOTE: Don't set ControlPort here - bine handles it automatically
 	torrc += "DataDirectory " + m.cfg.DataDir + "\n"
 	torrc += "SafeLogging 0\n"
+
+	// Run as unprivileged user if detected
+	if m.torUser != nil {
+		torrc += fmt.Sprintf("User %s\n", m.torUser.Username)
+	}
 
 	// Performance tuning
 	torrc += "NumEntryGuards 4\n"

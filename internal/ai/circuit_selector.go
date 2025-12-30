@@ -355,7 +355,7 @@ func (s *SmartCircuitSelector) DecayOldData() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	threshold := time.Now().Add(-7 * 24 * time.Hour) // 7 days
+	threshold := time.Now().Add(-24 * time.Hour) // 24 hours for anonymity (was 7 days)
 
 	for fp, perf := range s.exitPerformance {
 		if perf.LastUpdated.Before(threshold) {

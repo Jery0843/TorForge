@@ -2,7 +2,7 @@
 
 # 🧅 TorForge
 
-**Advanced Transparent Tor Proxy with AI-Powered Security**
+**Experimental Transparent Tor Proxy with AI-Powered Security**
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -10,7 +10,7 @@
 
 [![Speed](https://img.shields.io/badge/Speed-20Mbps+-brightgreen.svg)]()
 
-*Route all system traffic through Tor with military-grade security features*
+*Route all system traffic through Tor with experimental security features*
 
 </div>
 
@@ -42,7 +42,7 @@ TorForge is a transparent Tor proxy that routes all system traffic through the T
 | **Circuit Racing** | Race 5 circuits on startup, use fastest (`--race`) |
 | **Auto-Rotation** | Automatically change exit IP on schedule |
 
-### 🔐 Advanced Security
+### 🔐 Experimental Security
 | Feature | Description |
 |---------|-------------|
 | **Post-Quantum Encryption** | CRYSTALS-Kyber768 encrypts locally saved data (ML weights, cache) |

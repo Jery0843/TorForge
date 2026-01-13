@@ -1,4 +1,13 @@
-// Package ai provides AI-powered features for TorForge
+// Package ai implements exit node quality prediction using a lightweight neural network.
+//
+// Design rationale: We use a simple 3-layer MLP (6→16→8→1) rather than heavyweight
+// ML frameworks because: (1) the prediction problem is low-dimensional, (2) we need
+// sub-millisecond inference for real-time circuit selection, and (3) zero external
+// dependencies reduce attack surface for a security tool.
+//
+// The model learns from observed latency/bandwidth samples and excludes consistently
+// poor exit nodes. A TTL-based re-evaluation (1 hour) prevents permanent exclusions,
+// allowing nodes to recover after transient load issues.
 package ai
 
 import (
@@ -99,7 +108,11 @@ func NewSmartCircuitSelector(dataDir string) *SmartCircuitSelector {
 		decayFactor:  0.95,
 		minSamples:   5,
 
-		// Exclusion TTL - re-evaluate bad exits after 1 hour
+		// Re-evaluate excluded exits after 1 hour.
+		// Why 1 hour? Tor exit node performance fluctuates with load.
+		// Too short = thrashing (re-test before conditions stabilize).
+		// Too long = miss genuinely recovered nodes.
+		// 1 hour balances stability vs adaptability based on empirical observation.
 		exclusionTTL: 1 * time.Hour,
 	}
 

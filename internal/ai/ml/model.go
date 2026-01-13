@@ -1,5 +1,16 @@
-// Package ml provides machine learning models for TorForge
-// This is a pure-Go implementation with no external ML dependencies
+// Package ml implements a pure-Go neural network for exit node quality prediction.
+//
+// Architecture: 3-layer MLP (6 inputs → 16 hidden → 8 hidden → 1 output)
+//
+// Why pure Go? Security tools shouldn't depend on Python/TensorFlow:
+//   - No additional attack surface from ML frameworks
+//   - Single binary deployment (no pip, no CUDA, no version conflicts)
+//   - Inference is fast enough (<1ms) for the problem size
+//
+// Why this architecture? The prediction problem is simple: given 6 normalized
+// features (latency, bandwidth, success rate, time of day, sample count, recency),
+// output a 0-1 quality score. Two hidden layers with 16/8 neurons handle
+// non-linear patterns without overfitting on our small dataset (~250 samples).
 package ml
 
 import (

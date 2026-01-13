@@ -1,4 +1,14 @@
-// Package security provides advanced security features for TorForge
+// Package security provides defense-in-depth features for TorForge.
+//
+// This package addresses threats that Tor itself doesn't cover:
+//   - Post-quantum encryption: Protects locally stored data (exit IPs, ML weights)
+//     against future quantum attacks using CRYSTALS-Kyber768 (NIST Level 3).
+//   - Dead man's switch: Emergency shutdown clears traces when physical security
+//     is compromised.
+//   - Decoy traffic: Frustrates traffic analysis by injecting fake requests.
+//
+// Note: None of these protect network traffic—Tor handles that. These protect
+// the local system state and frustrate forensic analysis.
 package security
 
 import (
@@ -15,7 +25,13 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Argon2id parameters (OWASP recommended for password hashing)
+// Argon2id parameters for password-based key derivation.
+// Why these values? Balance between resistance to GPU/ASIC attacks and UX:
+//   - 64MB memory: Makes parallel cracking expensive on GPUs
+//   - 3 iterations: ~500ms on commodity hardware (acceptable for interactive use)
+//   - 4 threads: Utilizes multi-core without monopolizing system
+//
+// Based on OWASP recommendations for password hashing.
 const (
 	argon2Time    = 3         // Number of iterations
 	argon2Memory  = 64 * 1024 // 64 MB memory

@@ -23,7 +23,16 @@ type PanicConfig struct {
 	KillProcs bool   `yaml:"kill_procs"`
 }
 
-// DeadManSwitch provides emergency shutdown capabilities
+// DeadManSwitch provides emergency shutdown capabilities.
+//
+// Threat model: Physical seizure or coercion. When activated:
+//  1. Kill network immediately (flush iptables, kill sockets)
+//  2. Stop Tor process
+//  3. Clear traces (browser caches, shell history)
+//  4. Optional: wipe RAM (drop_caches)
+//
+// Activation is intentionally unambiguous (function key press in terminal)
+// to prevent accidental triggers while remaining quick for emergencies.
 type DeadManSwitch struct {
 	mu        sync.RWMutex
 	enabled   bool

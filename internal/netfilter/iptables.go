@@ -318,6 +318,16 @@ func (m *IPTablesManager) applyFilterRules() error {
 	// ===========================================
 	// CRITICAL SECURITY: LEAK PREVENTION RULES
 	// ===========================================
+	// These rules implement the kill switch. Rule order matters:
+	// 1. Allow established (needed for Tor's existing circuits)
+	// 2. Allow Tor by UID (only Tor can make outbound connections)
+	// 3. Allow loopback (local services)
+	// 4. Allow TCP (will be redirected to Tor by NAT rules above)
+	// 5. Block ICMP (ping timing can leak real IP)
+	// 6. Block UDP (except DNS to Tor's port)
+	// 7. Default DROP (catch-all—if we reach here, something is wrong)
+	//
+	// If any rule fails to match, traffic is dropped rather than leaked.
 
 	// Block ICMP (ping) - can leak real IP
 	icmpBlock := []string{

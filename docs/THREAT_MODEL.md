@@ -66,16 +66,4 @@ TorForge assumes the following are **not compromised**:
 3. **Disable WebRTC** in browser settings
 4. **Don't log into personal accounts** while using Tor
 5. **Use `--no-ai` flag** if concerned about any local learning patterns
-6. **Consider whonix or Tails** for high-risk threat models
-
-## Why This Document Matters
-
-Security tools are often criticized for not being explicit about limitations. By documenting these boundaries clearly:
-
-- Users can make informed decisions about their threat model
-- Researchers can evaluate the tool fairly
-- The project demonstrates security maturity
-
----
-
-*Last updated: 2026-01-13*
+6. **Consider Whonix or Tails** for high-risk threat models

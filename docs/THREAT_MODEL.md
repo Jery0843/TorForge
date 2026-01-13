@@ -61,9 +61,10 @@ TorForge assumes the following are **not compromised**:
 
 ## Recommendations for Maximum Anonymity
 
-1. **Use Tor Browser** over TorForge for web browsing (handles fingerprinting)
-2. **Enable HTTPS Everywhere** (protects from malicious exits)
-3. **Disable WebRTC** in browser settings
-4. **Don't log into personal accounts** while using Tor
-5. **Use `--no-ai` flag** if concerned about any local learning patterns
-6. **Consider Whonix or Tails** for high-risk threat models
+1. **For web browsing: Use Tor Browser WITHOUT TorForge** (Tor Browser handles both IP and fingerprinting; running with TorForge causes Tor-over-Tor issues)
+2. **TorForge is for non-browser apps** (curl, wget, terminal tools, system-wide protection)
+3. **Enable HTTPS Everywhere** (protects from malicious exits)
+4. **Disable WebRTC** in any browser you use with TorForge
+5. **Don't log into personal accounts** while using Tor
+6. **Use `--no-ai` flag** if concerned about any local learning patterns
+7. **Consider Whonix or Tails** for high-risk threat models

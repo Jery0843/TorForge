@@ -51,7 +51,7 @@ TorForge is a transparent Tor proxy that routes all system traffic through the T
 | **Dead Man's Switch** | Panic key for instant emergency shutdown with trace wiping |
 
 > [!WARNING]
-> **Browser Fingerprinting:** TorForge protects your network traffic but does NOT prevent browser fingerprinting. Websites can still identify you through screen resolution, fonts, canvas, and other browser characteristics. For anonymous web browsing, use **Tor Browser** over TorForge. Incognito mode does NOT help.
+> **Browser Fingerprinting:** TorForge protects your network traffic but does NOT prevent browser fingerprinting. Websites can still identify you through screen resolution, fonts, canvas, and other browser characteristics. For anonymous web browsing, use **Tor Browser instead of TorForge** (not together—running Tor Browser with TorForge active causes Tor-over-Tor issues). TorForge is designed for non-browser apps (curl, wget, system-wide protection).
 
 ### 🤖 AI-Powered
 | Feature | Description |

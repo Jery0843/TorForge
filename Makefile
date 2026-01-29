@@ -2,7 +2,7 @@
 # Cross-platform build system for TorForge
 
 BINARY_NAME := torforge
-VERSION := 1.0.0
+VERSION := 1.1.2
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "dev")
 BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 

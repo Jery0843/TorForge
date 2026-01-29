@@ -54,5 +54,5 @@ EXPOSE 9050 9040 5353 8080
 
 # Labels
 LABEL maintainer="0xJerry"
-LABEL version="1.0.0"
+LABEL version="1.1.2"
 LABEL description="TorForge - Advanced Transparent Tor Proxy"

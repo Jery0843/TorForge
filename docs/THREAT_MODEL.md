@@ -11,7 +11,7 @@ This document defines what TorForge protects against, what it does **not** prote
 |--------|------------------------|
 | **ISP surveillance** | All traffic routed through Tor; ISP sees only encrypted Tor traffic |
 | **Captive portals** | Traffic bypasses local network inspection |
-| **Network censorship** | Pluggable transports (obfs4, Snowflake) disguise Tor traffic |
+| **Network censorship** | Pluggable transports (obfs4, Snowflake, WebTunnel) disguise Tor traffic |
 | **Passive network observer** | Tor's 3-hop routing prevents correlation between source and destination |
 | **DNS leaks** | DNS forced through Tor's DNS port; non-Tor DNS blocked |
 | **IP leaks from apps** | Kernel-level iptables capture; no app can bypass |

@@ -25,6 +25,7 @@ const (
 	BridgeTypeObfs4     BridgeType = "obfs4"
 	BridgeTypeSnowflake BridgeType = "snowflake"
 	BridgeTypeMeek      BridgeType = "meek-azure"
+	BridgeTypeWebTunnel BridgeType = "webtunnel"
 	BridgeTypeVanilla   BridgeType = "vanilla"
 )
 
@@ -67,7 +68,7 @@ func NewBridgeDiscovery(dataDir string) *BridgeDiscovery {
 		dataDir:        dataDir,
 		testTimeout:    30 * time.Second,
 		maxBridges:     10,
-		preferredTypes: []BridgeType{BridgeTypeObfs4, BridgeTypeSnowflake},
+		preferredTypes: []BridgeType{BridgeTypeObfs4, BridgeTypeSnowflake, BridgeTypeWebTunnel},
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -109,15 +110,17 @@ func (bd *BridgeDiscovery) DetectCensorship(ctx context.Context) (bool, string) 
 	log.Info().Msg("detecting censorship...")
 
 	// Test 1: Try to connect to Tor directory authorities
+	// Use multiple DAs to reduce false positives from network issues
 	dirAuthorities := []string{
 		"128.31.0.39:9131",   // moria1
 		"86.59.21.38:443",    // tor26
 		"194.109.206.212:80", // dizum
+		"199.58.81.140:80",   // dannenberg
 	}
 
 	blocked := 0
 	for _, addr := range dirAuthorities {
-		conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+		conn, err := net.DialTimeout("tcp", addr, 15*time.Second) // Increased timeout
 		if err != nil {
 			blocked++
 			continue
@@ -125,21 +128,25 @@ func (bd *BridgeDiscovery) DetectCensorship(ctx context.Context) (bool, string) 
 		conn.Close()
 	}
 
-	if blocked >= 2 {
-		log.Warn().Int("blocked", blocked).Msg("censorship detected - directory authorities blocked")
+	// Only consider censored if ALL directory authorities are blocked
+	// This prevents false positives from network issues or single server downtime
+	if blocked >= len(dirAuthorities) {
+		log.Warn().Int("blocked", blocked).Msg("censorship detected - all directory authorities blocked")
 		return true, "directory_authorities_blocked"
 	}
 
-	// Test 2: Try to fetch Tor consensus
-	resp, err := bd.httpClient.Get("https://consensus-health.torproject.org/")
-	if err != nil {
-		log.Warn().Err(err).Msg("censorship detected - tor project blocked")
-		return true, "torproject_blocked"
-	}
-	resp.Body.Close()
+	// Test 2: Try to fetch Tor consensus (only if most DAs failed)
+	if blocked >= 3 {
+		resp, err := bd.httpClient.Get("https://consensus-health.torproject.org/")
+		if err != nil {
+			log.Warn().Err(err).Msg("censorship detected - tor project blocked")
+			return true, "torproject_blocked"
+		}
+		resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return true, "torproject_filtered"
+		if resp.StatusCode != 200 {
+			return true, "torproject_filtered"
+		}
 	}
 
 	log.Info().Msg("no censorship detected")
@@ -176,6 +183,15 @@ func (bd *BridgeDiscovery) DiscoverBridges(ctx context.Context) ([]Bridge, error
 
 	// Save for future use
 	bd.saveBridges()
+
+	// Log which bridge types are available
+	bridgeTypeCounts := make(map[BridgeType]int)
+	for _, b := range working {
+		bridgeTypeCounts[b.Type]++
+	}
+	for bType, count := range bridgeTypeCounts {
+		log.Info().Str("type", string(bType)).Int("count", count).Msgf("🌉 Found %d %s bridge(s)", count, bType)
+	}
 
 	log.Info().Int("working", len(working)).Msg("bridge discovery complete")
 	return working, nil
@@ -266,6 +282,15 @@ func (bd *BridgeDiscovery) parseBridgeLine(line string) *Bridge {
 		if len(parts) > 3 {
 			b.Params = strings.Join(parts[3:], " ")
 		}
+	case "webtunnel":
+		b.Type = BridgeTypeWebTunnel
+		b.Address = parts[1]
+		if len(parts) > 2 {
+			b.Fingerprint = parts[2]
+		}
+		if len(parts) > 3 {
+			b.Params = strings.Join(parts[3:], " ")
+		}
 	case "snowflake":
 		b.Type = BridgeTypeSnowflake
 		b.Address = strings.Join(parts[1:], " ")
@@ -290,8 +315,9 @@ func (bd *BridgeDiscovery) testBridges(ctx context.Context, bridges []Bridge) []
 	var working []Bridge
 
 	for _, b := range bridges {
-		// Skip testing Snowflake and Meek (they use different protocols)
-		if b.Type == BridgeTypeSnowflake || b.Type == BridgeTypeMeek {
+		// Skip testing Snowflake, Meek, and WebTunnel (they use different protocols)
+		// WebTunnel uses HTTPS/WebSocket which requires special handling
+		if b.Type == BridgeTypeSnowflake || b.Type == BridgeTypeMeek || b.Type == BridgeTypeWebTunnel {
 			b.Working = true
 			working = append(working, b)
 			continue
@@ -334,18 +360,26 @@ func (bd *BridgeDiscovery) GetBridgeLines() []string {
 	bd.mu.RLock()
 	defer bd.mu.RUnlock()
 
+	log := logger.WithComponent("bridge")
 	var lines []string
 	for _, b := range bd.workingBridges {
 		line := ""
 		switch b.Type {
 		case BridgeTypeObfs4:
 			line = fmt.Sprintf("obfs4 %s %s %s", b.Address, b.Fingerprint, b.Params)
+			log.Info().Str("type", "obfs4").Str("address", b.Address).Msg("🌉 Using obfs4 bridge")
+		case BridgeTypeWebTunnel:
+			line = fmt.Sprintf("webtunnel %s %s %s", b.Address, b.Fingerprint, b.Params)
+			log.Info().Str("type", "webtunnel").Str("address", b.Address).Msg("🌉 Using WebTunnel bridge")
 		case BridgeTypeSnowflake:
 			line = fmt.Sprintf("snowflake %s %s", b.Address, b.Params)
+			log.Info().Str("type", "snowflake").Msg("🌉 Using Snowflake bridge")
 		case BridgeTypeMeek:
 			line = fmt.Sprintf("meek_lite %s %s", b.Address, b.Params)
+			log.Info().Str("type", "meek-azure").Msg("🌉 Using Meek-Azure bridge")
 		case BridgeTypeVanilla:
 			line = fmt.Sprintf("%s %s", b.Address, b.Fingerprint)
+			log.Info().Str("type", "vanilla").Str("address", b.Address).Msg("🌉 Using vanilla bridge")
 		}
 		lines = append(lines, strings.TrimSpace(line))
 	}

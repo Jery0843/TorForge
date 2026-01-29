@@ -140,7 +140,26 @@ torforge ai sensitive <domain>
 |---------|-------------|
 | **Bridge Auto-Discovery** | Finds working bridges when Tor is blocked |
 | **Censorship Detection** | Automatically detects if Tor is being blocked |
-| **Pluggable Transports** | obfs4, Snowflake, meek-azure support |
+| **Pluggable Transports** | obfs4, Snowflake, WebTunnel, meek-azure support |
+
+#### Bridge Usage
+
+```bash
+# Auto-detect censorship, use bridges only if blocked
+sudo torforge tor --auto-bridge
+
+# Always use bridges (for testing or known-censored networks)
+sudo torforge tor --force-bridge
+```
+
+#### Supported Transports
+
+| Transport | Description | Best For |
+|-----------|-------------|----------|
+| **obfs4** | Obfuscated TCP traffic | Light-moderate censorship |
+| **Snowflake** | WebRTC-based, uses volunteer proxies | Most censorship scenarios |
+| **WebTunnel** | Disguises as HTTPS to real website | Heavy censorship (China, Iran) |
+| **meek-azure** | CDN-based fronting | Extreme censorship |
 
 ---
 
@@ -257,7 +276,8 @@ sudo torforge tor [flags]
 | `--decoy-traffic` | | Generate N% fake traffic (0-100) | 0 |
 | `--stego` | | Steganography mode (mimic streaming) | off |
 | `--panic-key` | | Dead man's switch key (e.g., F12) | none |
-| `--auto-bridge` | | Auto-discover bridges if blocked | off |
+| `--auto-bridge` | | Detect censorship, use bridges if blocked | off |
+| `--force-bridge` | | Always use bridges (skip detection) | off |
 | `--exit-nodes` | `-e` | Preferred exit countries (US,DE) | any |
 | `--bypass` | `-b` | Bypass patterns (*.local) | none |
 | `--speed` | `-s` | Bandwidth limit (100Mbps) | none |

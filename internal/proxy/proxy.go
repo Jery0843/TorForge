@@ -321,7 +321,7 @@ func (p *Proxy) getAPIStatus() (*api.StatusResponse, error) {
 		BytesSent:      status.BytesSent,
 		BytesRecv:      status.BytesRecv,
 		DNSQueries:     status.DNSQueries,
-		Version:        "1.0.0",
+		Version:        "1.1.2",
 	}, nil
 }
 

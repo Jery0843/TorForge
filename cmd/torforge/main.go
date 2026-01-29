@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jery0843/torforge/internal/bridge"
 	"github.com/jery0843/torforge/internal/proxy"
 	"github.com/jery0843/torforge/internal/security"
 	"github.com/jery0843/torforge/internal/tor"
@@ -23,7 +24,7 @@ import (
 )
 
 var (
-	version = "1.0.0"
+	version = "1.1.2"
 	commit  = "dev"
 )
 
@@ -120,6 +121,7 @@ func init() {
 	torCmd.Flags().StringP("exit-nodes", "e", "", "preferred exit nodes (country codes)")
 	torCmd.Flags().BoolP("daemon", "d", false, "run as daemon")
 	torCmd.Flags().Bool("auto-bridge", false, "automatically discover and use bridges if Tor is blocked")
+	torCmd.Flags().Bool("force-bridge", false, "always use bridges (skip censorship detection)")
 	torCmd.Flags().Bool("post-quantum", false, "enable post-quantum encryption layer (CRYSTALS-Kyber)")
 	torCmd.Flags().String("pq-password", "", "password for post-quantum encryption (allows decryption later)")
 	torCmd.Flags().Int("rotate-circuit", 0, "auto-rotate circuit every N minutes (0 = disabled)")
@@ -305,6 +307,7 @@ func runTor(cmd *cobra.Command, args []string) error {
 	// Check for special features
 	postQuantum, _ := cmd.Flags().GetBool("post-quantum")
 	autoBridge, _ := cmd.Flags().GetBool("auto-bridge")
+	forceBridge, _ := cmd.Flags().GetBool("force-bridge")
 
 	if postQuantum {
 		if err := p.EnableQuantumLayer(); err != nil {
@@ -325,9 +328,58 @@ func runTor(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
-	if autoBridge {
-		fmt.Println("   🌉 Auto-Bridge: Enabled (censorship bypass)")
-		log.Info().Msg("bridge auto-discovery enabled")
+
+	// Bridge mode handling
+	bridgeDiscovery := bridge.NewBridgeDiscovery("/var/lib/torforge")
+
+	if forceBridge {
+		// Force bridge mode - skip censorship detection, always use bridges
+		fmt.Println("   🌉 Force-Bridge: Using bridges (skipping censorship check)...")
+		log.Info().Msg("force-bridge mode: using bridges without censorship check")
+
+		bridges, err := bridgeDiscovery.DiscoverBridges(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("bridge discovery failed")
+			fmt.Println("   ⚠️  Bridge discovery failed")
+		} else {
+			bridgeLines := bridgeDiscovery.GetBridgeLines()
+			fmt.Printf("   🌉 Found %d working bridges:\n", len(bridges))
+			for _, line := range bridgeLines {
+				// Truncate for display
+				if len(line) > 60 {
+					line = line[:60] + "..."
+				}
+				fmt.Printf("      → %s\n", line)
+			}
+		}
+	} else if autoBridge {
+		// Auto-bridge mode - detect censorship first
+		fmt.Println("   🌉 Auto-Bridge: Detecting censorship...")
+		log.Info().Msg("auto-bridge mode: checking for censorship")
+
+		censored, reason := bridgeDiscovery.DetectCensorship(ctx)
+		if censored {
+			fmt.Printf("   ⚠️  Censorship detected: %s\n", reason)
+			log.Warn().Str("reason", reason).Msg("censorship detected, discovering bridges")
+
+			bridges, err := bridgeDiscovery.DiscoverBridges(ctx)
+			if err != nil {
+				log.Warn().Err(err).Msg("bridge discovery failed")
+				fmt.Println("   ⚠️  Bridge discovery failed")
+			} else {
+				bridgeLines := bridgeDiscovery.GetBridgeLines()
+				fmt.Printf("   🌉 Found %d working bridges:\n", len(bridges))
+				for _, line := range bridgeLines {
+					if len(line) > 60 {
+						line = line[:60] + "..."
+					}
+					fmt.Printf("      → %s\n", line)
+				}
+			}
+		} else {
+			fmt.Println("   ✅ No censorship detected - using direct Tor connection")
+			log.Info().Msg("no censorship detected, using direct connection")
+		}
 	}
 
 	// Decoy Traffic Generator

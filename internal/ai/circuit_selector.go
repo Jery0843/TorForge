@@ -250,8 +250,12 @@ func (s *SmartCircuitSelector) calculateScore(perf *CircuitPerformance, destinat
 
 		score, err := s.mlModel.Predict(features)
 		if err == nil {
+			fp := perf.ExitFingerprint
+			if len(fp) > 8 {
+				fp = fp[:8]
+			}
 			log.Debug().
-				Str("exit", perf.ExitFingerprint[:8]).
+				Str("exit", fp).
 				Float64("ml_score", score).
 				Msg("🧠 ML prediction used for circuit scoring")
 			return score
@@ -261,8 +265,12 @@ func (s *SmartCircuitSelector) calculateScore(perf *CircuitPerformance, destinat
 	}
 
 	// Fallback: heuristic-based scoring
+	fp := perf.ExitFingerprint
+	if len(fp) > 8 {
+		fp = fp[:8]
+	}
 	log.Debug().
-		Str("exit", perf.ExitFingerprint[:8]).
+		Str("exit", fp).
 		Bool("ml_enabled", s.mlEnabled).
 		Msg("📊 Using heuristic scoring (ML not available)")
 	// Normalize metrics (lower latency = higher score, higher bandwidth = higher score)

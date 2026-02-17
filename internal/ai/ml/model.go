@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jery0843/torforge/pkg/logger"
@@ -188,7 +189,7 @@ func (m *QualityModel) Predict(features CircuitFeatures) (float64, error) {
 
 	// Forward pass
 	output, _, _, _ := m.forward(input)
-	m.predictCount++
+	atomic.AddInt64(&m.predictCount, 1)
 
 	return output[0], nil
 }
@@ -465,7 +466,7 @@ func (m *QualityModel) GetStats() map[string]interface{} {
 
 	return map[string]interface{}{
 		"train_count":     m.trainCount,
-		"predict_count":   m.predictCount,
+		"predict_count":   atomic.LoadInt64(&m.predictCount),
 		"avg_loss":        m.avgLoss,
 		"last_train_time": m.lastTrainTime,
 		"architecture":    fmt.Sprintf("%d→%d→%d→%d", inputSize, hiddenSize1, hiddenSize2, outputSize),

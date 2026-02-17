@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
+	"syscall"
 
 	"github.com/jery0843/torforge/pkg/config"
 	"github.com/jery0843/torforge/pkg/logger"
@@ -248,7 +249,5 @@ func (u *UDPProxyListener) Stop() error {
 // setSocketOption sets a socket option
 func setSocketOption(fd, level, opt, value int) error {
 	// Use syscall to set socket option
-	return exec.Command("sh", "-c",
-		fmt.Sprintf("python3 -c 'import socket; s=socket.fromfd(%d, socket.AF_INET, socket.SOCK_DGRAM); s.setsockopt(%d, %d, %d)'",
-			fd, level, opt, value)).Run()
+	return syscall.SetsockoptInt(fd, level, opt, value)
 }

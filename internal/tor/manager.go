@@ -239,23 +239,26 @@ func (m *Manager) waitForBootstrap(ctx context.Context) error {
 
 func parseBootstrapProgress(val string) int {
 	// Parse "NOTICE BOOTSTRAP PROGRESS=85 ..."
-	if len(val) < 10 {
-		return -1
-	}
-
-	// Simple parsing
-	for i := 0; i < len(val)-9; i++ {
-		if val[i:i+9] == "PROGRESS=" {
-			numStr := ""
-			for j := i + 9; j < len(val) && val[j] >= '0' && val[j] <= '9'; j++ {
-				numStr += string(val[j])
-			}
-			if n, err := strconv.Atoi(numStr); err == nil {
+	const prefix = "PROGRESS="
+	start := 0
+	for {
+		idx := strings.Index(val[start:], prefix)
+		if idx == -1 {
+			return -1
+		}
+		idx += start
+		numStart := idx + len(prefix)
+		numEnd := numStart
+		for numEnd < len(val) && val[numEnd] >= '0' && val[numEnd] <= '9' {
+			numEnd++
+		}
+		if numEnd > numStart {
+			if n, err := strconv.Atoi(val[numStart:numEnd]); err == nil {
 				return n
 			}
 		}
+		start = idx + 1
 	}
-	return -1
 }
 
 // Stop stops the Tor process

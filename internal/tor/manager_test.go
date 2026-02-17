@@ -60,6 +60,7 @@ func TestParseBootstrapProgress(t *testing.T) {
 		{"invalid", -1},
 		{"", -1},
 		{"PROGRESS=", -1},
+		{"NOTICE BOOTSTRAP PROGRESS=garbage PROGRESS=85 TAG=done", 85},
 	}
 
 	for _, tt := range tests {

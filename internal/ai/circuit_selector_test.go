@@ -3,6 +3,7 @@ package ai
 import (
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -79,23 +80,28 @@ func TestSmartCircuitSelector_GetExitRecommendations(t *testing.T) {
 	// Now we have ~360 samples. Confidence should be > 1.0.
 
 	// Call GetExitRecommendations multiple times concurrently
-	done := make(chan bool)
+	var wg sync.WaitGroup
+
 	for i := 0; i < 10; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for j := 0; j < 100; j++ {
 				rec := selector.GetExitRecommendations()
 				if rec != nil {
 					_ = len(rec.AvoidExits)
 				}
+				// Small sleep to allow context switches and real concurrent activity
 				time.Sleep(1 * time.Millisecond)
 			}
-			done <- true
 		}()
 	}
 
 	// Also call RecordCircuitPerformance concurrently
 	for i := 0; i < 5; i++ {
+		wg.Add(1)
 		go func(id int) {
+			defer wg.Done()
 			fp := fmt.Sprintf("%040d", id)
 			for j := 0; j < 50; j++ {
 				selector.RecordCircuitPerformance(
@@ -108,12 +114,9 @@ func TestSmartCircuitSelector_GetExitRecommendations(t *testing.T) {
 				)
 				time.Sleep(2 * time.Millisecond)
 			}
-			done <- true
 		}(i)
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 15; i++ {
-		<-done
-	}
+	wg.Wait()
 }

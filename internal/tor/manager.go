@@ -4,7 +4,9 @@ package tor
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +20,7 @@ import (
 	"github.com/jery0843/torforge/internal/security"
 	"github.com/jery0843/torforge/pkg/config"
 	"github.com/jery0843/torforge/pkg/logger"
+	"golang.org/x/net/proxy"
 )
 
 // Manager handles Tor process lifecycle and control
@@ -331,17 +334,41 @@ func (m *Manager) GetExitIP() (string, error) {
 		return "", fmt.Errorf("tor not running")
 	}
 
-	// Use curl with SOCKS5 proxy to get exit IP
-	socksAddr := fmt.Sprintf("socks5://127.0.0.1:%d", socksPort)
-	cmd := exec.Command("curl", "-s", "--proxy", socksAddr, "--max-time", "15", "https://api.ipify.org")
-	output, err := cmd.Output()
+	// Create SOCKS5 dialer
+	dialer, err := proxy.SOCKS5("tcp", fmt.Sprintf("127.0.0.1:%d", socksPort), nil, proxy.Direct)
 	if err != nil {
-		// Try alternative endpoint
-		cmd = exec.Command("curl", "-s", "--socks5-hostname", fmt.Sprintf("127.0.0.1:%d", socksPort), "--max-time", "15", "https://check.torproject.org/api/ip")
-		output, err = cmd.Output()
+		return "", fmt.Errorf("failed to create SOCKS5 dialer: %w", err)
+	}
+
+	// Create HTTP client with SOCKS5 transport
+	transport := &http.Transport{
+		Dial: dialer.Dial,
+	}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   15 * time.Second,
+	}
+
+	// Try primary endpoint
+	resp, err := client.Get("https://api.ipify.org")
+	var output []byte
+	if err == nil {
+		defer resp.Body.Close()
+		output, err = io.ReadAll(resp.Body)
+	}
+
+	// If primary failed or read failed, try alternative
+	if err != nil {
+		resp, err = client.Get("https://check.torproject.org/api/ip")
 		if err != nil {
 			return "", fmt.Errorf("failed to get exit IP: %w", err)
 		}
+		defer resp.Body.Close()
+		output, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed to read response body: %w", err)
+		}
+
 		// Parse JSON response {"IsTor":true,"IP":"x.x.x.x"}
 		response := string(output)
 		if idx := strings.Index(response, "\"IP\":\""); idx != -1 {
